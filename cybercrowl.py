@@ -380,7 +380,7 @@ def crowl(dirs, url, args):
             save = 1
             count += 1
 
-            # To check quickly:
+            # # To check quickly:
             # write(res)
             # break
 
@@ -437,30 +437,16 @@ def prettify(output):
 
         for line in output_split:
             if '+]' in line:
-                if ' directory' in line:
-                    # Find the positions of relevant substrings
-                    colon_index = line.find(': ')
-                    directory_index = line.find(' directory')
-
-                    # Extract the substring
-                    amount = line[colon_index + len(': '):directory_index]
-
+                parts = line.split(' ')
+                if len(parts) < 5:
+                    amount = parts[2]
                     result["message"] = f"Found {amount} potential vulnerabilities"
-
                     continue
 
-                # Find the positions of relevant substrings
-                url_start = line.find('[+]') + len('[+] ')
-                url_end = line.find(' -', url_start)
-                size_start = line.find(' - ', url_end) + len(' - ')
-                size_end = line.find(' : ', size_start)
-                status_start = line.find(': ') + len(': ')
-
-                # Extract the substrings
-                url = line[url_start:url_end]
-                size = line[size_start:size_end]
-                # status_end = line.find('\n', status_start)
-                status = line[status_start:].strip()
+                url = parts[1]
+                size = parts[3]
+                status = parts[6:]
+                status = ' '.join(status).strip()
 
                 obj = {
                     "url": url,
@@ -574,6 +560,7 @@ def main():
 
     # Get data was written to console
     console_output = stdout_buffer.getvalue()
+    print(console_output)
 
     # close
     list.close()
