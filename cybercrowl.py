@@ -381,6 +381,7 @@ def crowl(dirs, url, args):
             count += 1
 
             # To check quickly:
+            # write(res)
             # break
 
         elif response == 301:
@@ -452,7 +453,7 @@ def prettify(output):
                 url_start = line.find('[+]') + len('[+] ')
                 url_end = line.find(' -', url_start)
                 size_start = line.find(' - ', url_end) + len(' - ')
-                size_end = line.find('KB', size_start) + len('KB')
+                size_end = line.find(' : ', size_start)
                 status_start = line.find(': ') + len(': ')
 
                 # Extract the substrings
