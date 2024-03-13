@@ -34,7 +34,7 @@ from requests.auth import HTTPDigestAuth
 # from requests.packages.urllib3.exceptions import InsecureRequestWarning
 from urllib3.exceptions import InsecureRequestWarning
 
-from libs.colorama import Fore, Back, Style
+# from libs.colorama import Fore, Back, Style
 from libs import FileUtils
 from libs.tldextract import *
 
@@ -248,14 +248,11 @@ def read(url):
         url = ret.rsplit(';', 1)[1]
     if not ret and not url_ok:
         message = "Check url (ex: https://github.com) " + (ret if "Try" in str(ret) else "")
-        message = "\n\n" + Fore.YELLOW + "[-]" + Style.RESET_ALL + Style.BRIGHT + Back.RED + message
-        message += Style.RESET_ALL
+        message = "\n\n" "[-]" + message
         exit(write(message))
 
     # print Target
-    message = Style.BRIGHT + Fore.YELLOW
-    message += '\nTarget: {0}\n'.format(Fore.CYAN + url + Fore.YELLOW)
-    message += Style.RESET_ALL
+    message = '\nTarget: {0}\n'.format(url)
     write(message)
 
     return url
@@ -364,7 +361,6 @@ def crowl(dirs, url, args):
         # check response
         if response == 200 or response == 302 or response == 304:
             res = "[+] %s - %s : HTTP %s Found" % (f_url, f_size, response)
-            res = Fore.GREEN + res + Style.RESET_ALL
             save = 1
             count += 1
 
@@ -375,10 +371,8 @@ def crowl(dirs, url, args):
             res = "[-] %s - %s : HTTP %s : Moved Permanently" % (f_url, f_size, response)
         elif response == 401:
             res = "[-] %s - %s : HTTP %s : Unauthorized" % (f_url, f_size, response)
-            res = message = Fore.YELLOW + res + Style.RESET_ALL
         elif response == 403:
             res = "[-] %s - %s : HTTP %s : Needs authorization" % (f_url, f_size, response)
-            res = Fore.BLUE + res + Style.RESET_ALL
         elif response == 404:
             res = "[-] %s - %s : HTTP %s : Not Found" % (f_url, f_size, response)
         elif response == 405:
