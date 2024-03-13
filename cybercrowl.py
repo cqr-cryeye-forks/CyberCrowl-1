@@ -453,13 +453,13 @@ def prettify(output):
                 url_end = line.find(' -', url_start)
                 size_start = line.find(' - ', url_end) + len(' - ')
                 size_end = line.find('KB', size_start) + len('KB')
-                status_start = size_end + 2
+                status_start = line.find(': ') + len(': ')
 
                 # Extract the substrings
                 url = line[url_start:url_end]
                 size = line[size_start:size_end]
-                status_end = line.find('\n', status_start)
-                status = line[status_start:status_end]
+                # status_end = line.find('\n', status_start)
+                status = line[status_start:].strip()
 
                 obj = {
                     "url": url,
