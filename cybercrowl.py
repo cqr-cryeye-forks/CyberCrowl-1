@@ -15,9 +15,9 @@
 #  along with this program.  If not, see <http://www.gnu.org/licenses/>
 # ----------------------------------------------------------------------
 # @author Chamli Mohamed 14|06|2016
-
-
+import json
 import os
+import pathlib
 import sys
 import locale
 import subprocess
@@ -31,7 +31,8 @@ from fake_useragent import UserAgent
 from requests_ntlm import HttpNtlmAuth
 from requests.auth import HTTPBasicAuth
 from requests.auth import HTTPDigestAuth
-# from requests.packages.urllib3.exceptions import InsecureRequestWarning
+import sys
+from io import StringIO
 from urllib3.exceptions import InsecureRequestWarning
 
 # from libs.colorama import Fore, Back, Style
@@ -139,7 +140,8 @@ def update():
 
     if not os.path.exists(os.path.join(tool_path, ".git")):
         err_msg = "not a git repository. Please checkout the 'CyberCrowl' repository "
-        exit(write(err_msg))
+        write(err_msg)
+        return
     else:
         info_msg = "updating CyberCrowl to the latest development version from the "
         info_msg += "GitHub repository"
@@ -156,18 +158,22 @@ def update():
             success = not process.returncode
         except (IOError, OSError) as ex:
             success = False
-            exit(write(ex))
+            write(ex)
+            return
 
         if success:
-            exit(write("%s the latest revision '%s'" % (
-                "already at" if "Already" in stdout else "updated to", get_revision_number())))
+            write("%s the latest revision '%s'" % (
+                "already at" if "Already" in stdout else "updated to", get_revision_number()))
+            return
         else:
             if "Not a git repository" in stderr:
                 err_msg = "not a valid git repository. Please checkout the 'CyberCrowl' repository "
                 err_msg += "from GitHub (e.g. 'git clone --depth 1 https://github.com/chamli/CyberCrowl.git CyberCrowl')"
-                exit(write(err_msg))
+                write(err_msg)
+                return
             else:
-                exit(write("update could not be completed ('%s')" % re.sub(r"\W+", " ", stderr).strip()))
+                write("update could not be completed ('%s')" % re.sub(r"\W+", " ", stderr).strip())
+                return
 
     if not success:
         if platform.system() == 'Windows':
@@ -180,7 +186,8 @@ def update():
             info_msg = "for Linux platform it's required "
             info_msg += "to install a standard 'git' package (e.g.: 'sudo apt install git')"
 
-        exit(write(info_msg))
+        write(info_msg)
+        return
 
 
 # ask_change_url
@@ -249,7 +256,8 @@ def read(url):
     if not ret and not url_ok:
         message = "Check url (ex: https://github.com) " + (ret if "Try" in str(ret) else "")
         message = "\n\n" "[-]" + message
-        exit(write(message))
+        write(message)
+        return
 
     # print Target
     message = '\nTarget: {0}\n'.format(url)
@@ -313,36 +321,44 @@ def crowl(dirs, url, args):
                 ress = requests.get(f_url, headers=headers, auth=HTTPBasicAuth(auth_cred[0], auth_cred[1]),
                                     allow_redirects=False, proxies=proxies, verify=False)
             except requests.exceptions.ConnectionError:
-                exit(write("Error Connecting!"))
+                write("Error Connecting!")
+                return
             except requests.exceptions.ProxyError:
 
-                exit(write("Check your proxy please! "))
+                write("Check your proxy please! ")
+                return
 
         elif auth_type == "digest":
             try:
                 ress = requests.get(f_url, headers=headers, auth=HTTPDigestAuth(auth_cred[0], auth_cred[1]),
                                     allow_redirects=False, proxies=proxies, verify=False)
             except requests.exceptions.ConnectionError:
-                exit(write("Error Connecting!"))
+                write("Error Connecting!")
+                return
             except requests.exceptions.ProxyError:
-                exit(write("Check your proxy please! "))
+                write("Check your proxy please! ")
+                return
 
         elif auth_type == "ntlm":
             try:
                 ress = requests.get(f_url, headers=headers, auth=HttpNtlmAuth(auth_cred[0], auth_cred[1]),
                                     allow_redirects=False, proxies=proxies, verify=False)
             except requests.exceptions.ConnectionError:
-                exit(write("Error Connecting!"))
+                write("Error Connecting!")
+                return
             except requests.exceptions.ProxyError:
-                exit(write("Check your proxy please! "))
+                write("Check your proxy please! ")
+                return
 
         else:
             try:
                 ress = requests.get(f_url, headers=headers, allow_redirects=False, verify=False)
             except requests.exceptions.ConnectionError:
-                exit(write("Error Connecting!"))
+                write("Error Connecting!")
+                return
             except requests.exceptions.ProxyError:
-                exit(write("Check your proxy please! "))
+                write("Check your proxy please! ")
+                return
 
         response = ress.status_code
 
@@ -403,95 +419,169 @@ def crowl(dirs, url, args):
     logfile.close()
 
 
-def main():
+def prettify(output):
+    result = {"message": "No vulnerabilities found"}
+
+    if "Check your proxy please! " in output:
+        result["message"] = "Check your proxy please! "
+        return result
+    elif "Check url" in output:
+        result["message"] = "The url has either moved or been entered incorrectly."
+        return result
+
+    print(output)
+
     try:
-        global list
-        parser = argparse.ArgumentParser(
-            formatter_class=argparse.RawTextHelpFormatter,
-            prog='CyberCrowl',
-            description=__description__,
-            epilog='''\
-        EXAMPLE:
-        web site scan with internal wordlist
-          cybercrowl -u www.domain.com
-        web site scan with external wordlist
-          cybercrowl -u www.domain.com -w wordlist.txt
-                    '''
-        )
+        output_split = output.split('[')
 
-        parser.add_argument('-u', dest='url', help='specific target url, like domain.com', type=str)
+        for line in output_split:
+            if '+]' in line:
+                if ' directory' in line:
+                    # Find the positions of relevant substrings
+                    colon_index = line.find(': ')
+                    directory_index = line.find(' directory')
 
-        parser.add_argument('-w', help='specific path to wordlist file',
-                            nargs=1, dest='wordlist', type=str, required=False)
+                    # Extract the substring
+                    amount = line[colon_index + len(': '):directory_index]
 
-        parser.add_argument('-d', help='add delay between requests',
-                            nargs=1, dest='delay', type=float, default=0)
+                    result["message"] = f"Found {amount} potential vulnerabilities"
 
-        parser.add_argument('--random-agent', dest="randomAgent",
-                            help='Use randomly selected HTTP User-Agent header value',
-                            action='store_true')
+                    continue
 
-        parser.add_argument('--update', dest="update",
-                            help='Update CyberCrowl',
-                            action='store_true')
+                # Find the positions of relevant substrings
+                url_start = line.find('[+]') + len('[+] ')
+                url_end = line.find(' -', url_start)
+                size_start = line.find(' - ', url_end) + len(' - ')
+                size_end = line.find('KB', size_start) + len('KB')
+                status_start = size_end + 2
 
-        parser.add_argument("--auth-type", dest="authType",
-                            nargs='?', type=str, help="HTTP authentication type ""(Basic, Digest or NTLM)",
-                            required=False)
+                # Extract the substrings
+                url = line[url_start:url_end]
+                size = line[size_start:size_end]
+                status_end = line.find('\n', status_start)
+                status = line[status_start:status_end]
 
-        parser.add_argument("--auth-cred", dest="authCred",
-                            nargs=1, type=str, help="HTTP authentication credentials ""(name:password)", required=False)
+                obj = {
+                    "url": url,
+                    "size": size,
+                    "status": status,
+                }
 
-        parser.add_argument("--proxy", dest="proxy",
-                            nargs=1, type=str, help="Use a proxy to connect to the target URL", required=False)
+                if 'urls' not in result:
+                    result['urls'] = []
 
-        args = parser.parse_args()
+                result['urls'].append(obj)
 
-        # update version
-        if args.update:
-            update()
+    except Exception:
+        result["message"] = "Script error!"
 
-        required_together = ('authType', 'authCred')
+    return result
 
-        # args.authType will be None if authType is not provided
-        if any([getattr(args, x) for x in required_together]):
-            if not all([getattr(args, x) for x in required_together]):
-                exit(write("Cannot supply --auth-type without --auth-cred"))
 
-        # args strings
-        domain = args.url
-        w_list = args.wordlist
+def main():
+    global list
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.RawTextHelpFormatter,
+        prog='CyberCrowl',
+        description=__description__,
+        epilog='''\
+    EXAMPLE:
+    web site scan with internal wordlist
+      cybercrowl -u www.domain.com
+    web site scan with external wordlist
+      cybercrowl -u www.domain.com -w wordlist.txt
+                '''
+    )
 
+    parser.add_argument('-u', dest='url', help='specific target url, like domain.com', type=str)
+
+    parser.add_argument('--output-file', help='Path to output file', type=pathlib.Path)
+
+    parser.add_argument('-w', help='specific path to wordlist file',
+                        nargs=1, dest='wordlist', type=str, required=False)
+
+    parser.add_argument('-d', help='add delay between requests',
+                        nargs=1, dest='delay', type=float, default=0)
+
+    parser.add_argument('--random-agent', dest="randomAgent",
+                        help='Use randomly selected HTTP User-Agent header value',
+                        action='store_true')
+
+    parser.add_argument('--update', dest="update",
+                        help='Update CyberCrowl',
+                        action='store_true')
+
+    parser.add_argument("--auth-type", dest="authType",
+                        nargs='?', type=str, help="HTTP authentication type ""(Basic, Digest or NTLM)",
+                        required=False)
+
+    parser.add_argument("--auth-cred", dest="authCred",
+                        nargs=1, type=str, help="HTTP authentication credentials ""(name:password)", required=False)
+
+    parser.add_argument("--proxy", dest="proxy",
+                        nargs=1, type=str, help="Use a proxy to connect to the target URL", required=False)
+
+    args = parser.parse_args()
+
+    # update version
+    if args.update:
+        update()
+
+    required_together = ('authType', 'authCred')
+
+    # args.authType will be None if authType is not provided
+    if any([getattr(args, x) for x in required_together]):
+        if not all([getattr(args, x) for x in required_together]):
+            write("Cannot supply --auth-type without --auth-cred")
+            return
+
+    # args strings
+    domain = args.url
+    w_list = args.wordlist
+    output_file = args.output_file
+
+    if w_list:
+        w_list = w_list[0]
+
+    # check args
+    if domain:
         if w_list:
-            w_list = w_list[0]
-
-        # check args
-        if domain:
-            if w_list:
-                list = open(w_list, "r")
-            else:
-                list = open("list.txt", "r")
+            list = open(w_list, "r")
         else:
-            exit(write('error arguments: use cybercrowl -h to help'))
+            list = open("list.txt", "r")
+    else:
+        write('error arguments: use cybercrowl -h to help')
+        return
 
-        # read
-        url = read(domain)
+    # Initialize new output "console"
+    stdout_buffer = StringIO()
 
+    # Move standard output to IO
+    sys.stdout = stdout_buffer
+
+    # read
+    url = read(domain)
+
+    try:
         # After check ,start scan
         crowl(list, url, args)
+    except TypeError:  # if Nonetype
+        pass
 
-        # close
-        list.close()
+    # Return standard output
+    sys.stdout = sys.__stdout__
 
-    except KeyboardInterrupt:
+    # Get data was written to console
+    console_output = stdout_buffer.getvalue()
 
-        print('[!] Ctrl + C detected\n[!] Exiting')
-        sys.exit(0)
+    # close
+    list.close()
 
-    except EOFError:
+    result = prettify(console_output)
 
-        print('[!] Ctrl + D detected\n[!] Exiting')
-        sys.exit(0)
+    json_data = json.dumps(result)
+    output_file.write_text(json_data)
+    print(f"Final results save to {output_file.absolute().as_uri()}")
 
 
 if __name__ == '__main__':
