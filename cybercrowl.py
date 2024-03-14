@@ -189,20 +189,6 @@ def update():
         write(info_msg)
         return
 
-
-# ask_change_url
-# def yes_no(answer):
-#     yes = set(['yes', 'y', 'ye', ''])
-#     no = set(['no', 'n'])
-#
-#     while True:
-#         choice = answer.lower()
-#         if choice in yes:
-#             return True
-#         elif choice in no:
-#             return False
-
-
 def write(string):
     if platform.system() == 'Windows':
         sys.stdout.write(string)
@@ -239,25 +225,18 @@ def check_url(url):
 
 
 # read url
-def read(url):
+def read(url, result):
     ret = check_url(url)
     url_ok = False
     if "Maybe" in str(ret):
-        # w = "Would you like to change url to " + ret.rsplit(';', 1)[1] + " (y/n) : "
-        # choice = input(w)
-        # res = yes_no(choice)
-
-        # if res:
-        #     url_ok = True
-        #     url = ret.rsplit(';', 1)[1]
-
         url_ok = True
         url = ret.rsplit(';', 1)[1]
     if not ret and not url_ok:
         message = "Check url (ex: https://github.com) " + (ret if "Try" in str(ret) else "")
         message = "\n\n" "[-]" + message
+        result['message'] = 'The url has either moved or been entered incorrectly.'
         write(message)
-        return
+        return result
 
     # print Target
     message = '\nTarget: {0}\n'.format(url)
@@ -267,7 +246,7 @@ def read(url):
 
 
 # crawl directory
-def crowl(dirs, url, args):
+def crowl(dirs, url, args, result):
     # args strings
     domain = args.url
     w_list = args.wordlist
@@ -317,15 +296,19 @@ def crowl(dirs, url, args):
 
         # make request with different type of authentication
         if auth_type == "basic":
+            proxy_err = "Check your proxy please! "
+            conn_err = "Error Connecting!"
             try:
                 ress = requests.get(f_url, headers=headers, auth=HTTPBasicAuth(auth_cred[0], auth_cred[1]),
                                     allow_redirects=False, proxies=proxies, verify=False)
             except requests.exceptions.ConnectionError:
-                write("Error Connecting!")
+                write(conn_err)
+                result['message'] = conn_err
                 return
             except requests.exceptions.ProxyError:
 
-                write("Check your proxy please! ")
+                write(proxy_err)
+                result['message'] = proxy_err
                 return
 
         elif auth_type == "digest":
@@ -333,10 +316,12 @@ def crowl(dirs, url, args):
                 ress = requests.get(f_url, headers=headers, auth=HTTPDigestAuth(auth_cred[0], auth_cred[1]),
                                     allow_redirects=False, proxies=proxies, verify=False)
             except requests.exceptions.ConnectionError:
-                write("Error Connecting!")
+                write(conn_err)
+                result['message'] = conn_err
                 return
             except requests.exceptions.ProxyError:
-                write("Check your proxy please! ")
+                write(proxy_err)
+                result['message'] = proxy_err
                 return
 
         elif auth_type == "ntlm":
@@ -344,20 +329,24 @@ def crowl(dirs, url, args):
                 ress = requests.get(f_url, headers=headers, auth=HttpNtlmAuth(auth_cred[0], auth_cred[1]),
                                     allow_redirects=False, proxies=proxies, verify=False)
             except requests.exceptions.ConnectionError:
-                write("Error Connecting!")
+                write(conn_err)
+                result['message'] = conn_err
                 return
             except requests.exceptions.ProxyError:
-                write("Check your proxy please! ")
+                write(proxy_err)
+                result['message'] = proxy_err
                 return
 
         else:
             try:
                 ress = requests.get(f_url, headers=headers, allow_redirects=False, verify=False)
             except requests.exceptions.ConnectionError:
-                write("Error Connecting!")
+                write(conn_err)
+                result['message'] = conn_err
                 return
             except requests.exceptions.ProxyError:
-                write("Check your proxy please! ")
+                write(proxy_err)
+                result['message'] = proxy_err
                 return
 
         response = ress.status_code
@@ -377,11 +366,22 @@ def crowl(dirs, url, args):
         # check response
         if response == 200 or response == 302 or response == 304:
             res = "[+] %s - %s : HTTP %s Found" % (f_url, f_size, response)
+
+            obj = {
+                "url": f_url,
+                "size": f_size,
+                "response": response,
+            }
+
+            if 'urls' not in result:
+                result['urls'] = []
+
+            result['urls'].append(obj)
+
             save = 1
             count += 1
 
             # # To check quickly:
-            # write(res)
             # break
 
         elif response == 301:
@@ -417,56 +417,16 @@ def crowl(dirs, url, args):
             print("Sleeping for %s seconds" % str(delay))
 
     write("\n\n[+]Found : %s directory" % (count))
+    result['message'] = f'Found {count} directory'
     logfile.close()
-
-
-def prettify(output):
-    result = {"message": "No vulnerabilities found"}
-
-    if "Check your proxy please! " in output:
-        result["message"] = "Check your proxy please! "
-        return result
-    elif "Check url" in output:
-        result["message"] = "The url has either moved or been entered incorrectly."
-        return result
-
-    print(output)
-
-    try:
-        output_split = output.split('[')
-
-        for line in output_split:
-            if '+]' in line:
-                parts = line.split(' ')
-                if len(parts) < 5:
-                    amount = parts[2]
-                    result["message"] = f"Found {amount} potential vulnerabilities"
-                    continue
-
-                url = parts[1]
-                size = parts[3]
-                status = parts[6:]
-                status = ' '.join(status).strip()
-
-                obj = {
-                    "url": url,
-                    "size": size,
-                    "status": status,
-                }
-
-                if 'urls' not in result:
-                    result['urls'] = []
-
-                result['urls'].append(obj)
-
-    except Exception:
-        result["message"] = "Script error!"
-
     return result
 
 
 def main():
+
     global list
+    result = {}
+
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawTextHelpFormatter,
         prog='CyberCrowl',
@@ -540,32 +500,25 @@ def main():
         write('error arguments: use cybercrowl -h to help')
         return
 
-    # Initialize new output "console"
-    stdout_buffer = StringIO()
-
-    # Move standard output to IO
-    sys.stdout = stdout_buffer
-
     # read
-    url = read(domain)
+    data = read(domain, result)
 
-    try:
-        # After check ,start scan
-        crowl(list, url, args)
-    except TypeError:  # if Nonetype
-        pass
+    if isinstance(data, dict):
+        url = None
+        result = data
+    else:
+        url = data
 
-    # Return standard output
-    sys.stdout = sys.__stdout__
+    # try:
 
-    # Get data was written to console
-    console_output = stdout_buffer.getvalue()
-    print(console_output)
+    # After check, start scan
+    if url:
+        result = crowl(list, url, args, result)
+    # except TypeError:  # if Nonetype
+    #     pass
 
     # close
     list.close()
-
-    result = prettify(console_output)
 
     json_data = json.dumps(result)
     output_file.write_text(json_data)
